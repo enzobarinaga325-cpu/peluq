@@ -1,12 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Appointment, Employee, Service } from "@/lib/types";
-import { Card, Select } from "@/components/ui";
+import { Button, Card, Select } from "@/components/ui";
 import { money, todayStr, addDaysStr, DIAS_SEMANA } from "@/lib/format";
 import { dayOfWeekFor } from "@/lib/availability";
 import { useAuth } from "@/lib/AuthContext";
 
 type Row = Appointment & { employee?: Employee; service?: Service };
+
+function BookingLinkCard({ employeeId }: { employeeId: string }) {
+  const [slug, setSlug] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("employees")
+      .select("slug")
+      .eq("id", employeeId)
+      .maybeSingle()
+      .then(({ data }) => setSlug(data?.slug ?? null));
+  }, [employeeId]);
+
+  if (!slug) return null;
+  const url = `${window.location.origin}/${slug}`;
+
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-sm font-semibold">Tu link para compartir con clientes</h2>
+        <p className="text-sm text-zinc-600">{url}</p>
+      </div>
+      <Button
+        variant="secondary"
+        onClick={() => {
+          navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }}
+      >
+        {copied ? "¡Copiado!" : "Copiar link"}
+      </Button>
+    </Card>
+  );
+}
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -86,6 +122,8 @@ export function Dashboard() {
           </Select>
         </div>
       </div>
+
+      {profile?.role === "staff" && profile.employeeId && <BookingLinkCard employeeId={profile.employeeId} />}
 
       {loading ? (
         <p className="text-sm text-zinc-500">Cargando…</p>
