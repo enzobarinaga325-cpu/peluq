@@ -29,10 +29,12 @@ export function getAvailableSlots(opts: {
   exceptions: ScheduleException[];
   busySlots: BusySlot[];
   durationMinutes: number;
-  stepMinutes?: number;
   now?: Date;
 }): string[] {
-  const { date, schedules, exceptions, busySlots, durationMinutes, stepMinutes = 15, now = new Date() } = opts;
+  // El paso entre horarios es la propia duración del servicio: turnos consecutivos sin huecos
+  // (ej. servicio de 35 min → 09:00, 09:35, 10:10…), sin una configuración aparte que lo contradiga.
+  const { date, schedules, exceptions, busySlots, durationMinutes, now = new Date() } = opts;
+  const stepMinutes = durationMinutes;
 
   const exception = exceptions.find((e) => e.date === date);
 
