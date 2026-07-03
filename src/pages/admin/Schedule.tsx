@@ -15,6 +15,7 @@ export function SchedulePage() {
   const [excClosed, setExcClosed] = useState(true);
   const [slotInterval, setSlotInterval] = useState(15);
   const [savingInterval, setSavingInterval] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -40,10 +41,12 @@ export function SchedulePage() {
 
   async function saveSlotInterval(minutes: number) {
     setSavingInterval(true);
-    await supabase
+    setError(null);
+    const { error } = await supabase
       .from("employee_settings")
       .upsert({ employee_id: employeeId, slot_interval_minutes: minutes }, { onConflict: "employee_id" });
     setSavingInterval(false);
+    if (error) setError(error.message);
   }
 
   useEffect(() => {
@@ -55,34 +58,45 @@ export function SchedulePage() {
   }
 
   async function setDayOff(day: number) {
+    setError(null);
     const existing = scheduleFor(day);
-    if (existing) await supabase.from("schedules").delete().eq("id", existing.id);
+    if (existing) {
+      const { error } = await supabase.from("schedules").delete().eq("id", existing.id);
+      if (error) setError(error.message);
+    }
     load(employeeId);
   }
 
   async function setDayHours(day: number, start: string, end: string) {
+    setError(null);
     const existing = scheduleFor(day);
-    if (existing) {
-      await supabase.from("schedules").update({ start_time: start, end_time: end }).eq("id", existing.id);
-    } else {
-      await supabase.from("schedules").insert({ employee_id: employeeId, day_of_week: day, start_time: start, end_time: end });
-    }
+    const { error } = existing
+      ? await supabase.from("schedules").update({ start_time: start, end_time: end }).eq("id", existing.id)
+      : await supabase.from("schedules").insert({ employee_id: employeeId, day_of_week: day, start_time: start, end_time: end });
+    if (error) setError(error.message);
     load(employeeId);
   }
 
   async function addException(e: React.FormEvent) {
     e.preventDefault();
     if (!excDate) return;
-    await supabase.from("schedule_exceptions").upsert(
+    setError(null);
+    const { error } = await supabase.from("schedule_exceptions").upsert(
       { employee_id: employeeId, date: excDate, is_closed: excClosed },
       { onConflict: "employee_id,date" }
     );
+    if (error) {
+      setError(error.message);
+      return;
+    }
     setExcDate("");
     load(employeeId);
   }
 
   async function removeException(id: string) {
-    await supabase.from("schedule_exceptions").delete().eq("id", id);
+    setError(null);
+    const { error } = await supabase.from("schedule_exceptions").delete().eq("id", id);
+    if (error) setError(error.message);
     load(employeeId);
   }
 
@@ -91,6 +105,7 @@ export function SchedulePage() {
       <div>
         <h1 className="text-lg font-semibold">Horarios</h1>
         <p className="text-sm text-zinc-500">Horario semanal y días puntuales cerrados (feriados, vacaciones, etc.)</p>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </div>
 
       {profile?.role === "owner" && (

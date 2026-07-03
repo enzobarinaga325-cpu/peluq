@@ -27,6 +27,7 @@ export function Employees() {
   const [accessSaving, setAccessSaving] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessDoneFor, setAccessDoneFor] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -43,16 +44,27 @@ export function Employees() {
     e.preventDefault();
     if (!name.trim()) return;
     setCreating(true);
+    setError(null);
     const slug = slugify(name);
-    await supabase.from("employees").insert({ name: name.trim(), slug, phone: phone.trim() || null });
+    const { error } = await supabase.from("employees").insert({ name: name.trim(), slug, phone: phone.trim() || null });
+    setCreating(false);
+    if (error) {
+      setError(
+        error.code === "23505"
+          ? "Ya existe un empleado con un nombre muy similar (el link generado se repite). Probá con otro nombre."
+          : error.message
+      );
+      return;
+    }
     setName("");
     setPhone("");
-    setCreating(false);
     load();
   }
 
   async function toggleActive(emp: Employee) {
-    await supabase.from("employees").update({ active: !emp.active }).eq("id", emp.id);
+    setError(null);
+    const { error } = await supabase.from("employees").update({ active: !emp.active }).eq("id", emp.id);
+    if (error) setError(error.message);
     load();
   }
 
@@ -124,6 +136,7 @@ export function Employees() {
             Agregar
           </Button>
         </form>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </Card>
 
       {loading ? (

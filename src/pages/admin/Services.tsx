@@ -14,6 +14,7 @@ export function Services() {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [duration, setDuration] = useState("30");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -40,12 +41,17 @@ export function Services() {
   async function createService(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !employeeId) return;
-    await supabase.from("services").insert({
+    setError(null);
+    const { error } = await supabase.from("services").insert({
       employee_id: employeeId,
       name: name.trim(),
       price: Number(price) || 0,
       duration_minutes: Number(duration) || 30,
     });
+    if (error) {
+      setError(error.message);
+      return;
+    }
     setName("");
     setPrice("");
     setDuration("30");
@@ -53,12 +59,30 @@ export function Services() {
   }
 
   async function toggleActive(svc: Service) {
-    await supabase.from("services").update({ active: !svc.active }).eq("id", svc.id);
+    setError(null);
+    const { error } = await supabase.from("services").update({ active: !svc.active }).eq("id", svc.id);
+    if (error) setError(error.message);
     loadServices(employeeId);
   }
 
   async function updatePrice(svc: Service, newPrice: number) {
-    await supabase.from("services").update({ price: newPrice }).eq("id", svc.id);
+    setError(null);
+    const { error } = await supabase.from("services").update({ price: newPrice }).eq("id", svc.id);
+    if (error) setError(error.message);
+    loadServices(employeeId);
+  }
+
+  async function deleteService(svc: Service) {
+    if (!confirm(`¿Borrar "${svc.name}"? Esta acción no se puede deshacer.`)) return;
+    setError(null);
+    const { error } = await supabase.from("services").delete().eq("id", svc.id);
+    if (error) {
+      setError(
+        error.code === "23503"
+          ? `No se puede borrar "${svc.name}" porque ya tiene turnos asociados. Desactivalo en su lugar.`
+          : error.message
+      );
+    }
     loadServices(employeeId);
   }
 
@@ -99,6 +123,7 @@ export function Services() {
           </div>
           <Button type="submit">Agregar</Button>
         </form>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </Card>
 
       {loading ? (
@@ -126,6 +151,9 @@ export function Services() {
               <span className="text-xs text-zinc-400">{money(svc.price)}</span>
               <Button variant="secondary" onClick={() => toggleActive(svc)}>
                 {svc.active ? "Desactivar" : "Activar"}
+              </Button>
+              <Button variant="danger" onClick={() => deleteService(svc)}>
+                Borrar
               </Button>
             </Card>
           ))}
