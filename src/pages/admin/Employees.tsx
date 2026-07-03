@@ -21,6 +21,12 @@ export function Employees() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [accessFor, setAccessFor] = useState<string | null>(null);
+  const [accessEmail, setAccessEmail] = useState("");
+  const [accessPassword, setAccessPassword] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [accessDoneFor, setAccessDoneFor] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -63,6 +69,37 @@ export function Employees() {
     load();
   }
 
+  function openAccessForm(emp: Employee) {
+    setAccessFor(emp.id);
+    setAccessEmail("");
+    setAccessPassword("");
+    setAccessError(null);
+    setAccessDoneFor(null);
+  }
+
+  async function createAccess(emp: Employee, e: React.FormEvent) {
+    e.preventDefault();
+    setAccessSaving(true);
+    setAccessError(null);
+    const { data, error } = await supabase.functions.invoke("create-staff-user", {
+      body: { email: accessEmail.trim(), password: accessPassword, employee_id: emp.id },
+    });
+    setAccessSaving(false);
+    if (error) {
+      const bodyMsg = (error as any)?.context?.json
+        ? await (error as any).context.json().then((j: any) => j.error).catch(() => null)
+        : null;
+      setAccessError(bodyMsg || error.message || "No se pudo crear el acceso");
+      return;
+    }
+    if (data?.error) {
+      setAccessError(data.error);
+      return;
+    }
+    setAccessFor(null);
+    setAccessDoneFor(emp.id);
+  }
+
   if (profile?.role !== "owner") return <Navigate to="/admin" replace />;
 
   return (
@@ -94,42 +131,85 @@ export function Employees() {
       ) : (
         <div className="flex flex-col gap-3">
           {employees.map((emp) => (
-            <Card key={emp.id} className="flex flex-wrap items-center gap-4">
-              <img
-                src={emp.logo_url ?? "https://api.dicebear.com/9.x/initials/svg?seed=" + emp.name}
-                alt={emp.name}
-                className="h-14 w-14 rounded-full border border-zinc-200 object-cover"
-              />
-              <div className="flex-1 min-w-[180px]">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{emp.name}</span>
-                  <Badge color={emp.active ? "green" : "zinc"}>{emp.active ? "Activo" : "Inactivo"}</Badge>
-                </div>
-                <p className="text-xs text-zinc-500">/{emp.slug} · {emp.phone || "sin teléfono"}</p>
-              </div>
-              <label className="cursor-pointer text-sm text-zinc-600 underline">
-                Cambiar logo
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) uploadLogo(emp, file);
-                  }}
+            <Card key={emp.id} className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <img
+                  src={emp.logo_url ?? "https://api.dicebear.com/9.x/initials/svg?seed=" + emp.name}
+                  alt={emp.name}
+                  className="h-14 w-14 rounded-full border border-zinc-200 object-cover"
                 />
-              </label>
-              <Button variant="secondary" onClick={() => toggleActive(emp)}>
-                {emp.active ? "Desactivar" : "Activar"}
-              </Button>
-              <a
-                href={`/${emp.slug}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-zinc-500 underline"
-              >
-                Ver página
-              </a>
+                <div className="flex-1 min-w-[180px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{emp.name}</span>
+                    <Badge color={emp.active ? "green" : "zinc"}>{emp.active ? "Activo" : "Inactivo"}</Badge>
+                  </div>
+                  <p className="text-xs text-zinc-500">/{emp.slug} · {emp.phone || "sin teléfono"}</p>
+                </div>
+                <label className="cursor-pointer text-sm text-zinc-600 underline">
+                  Cambiar logo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadLogo(emp, file);
+                    }}
+                  />
+                </label>
+                <Button variant="secondary" onClick={() => toggleActive(emp)}>
+                  {emp.active ? "Desactivar" : "Activar"}
+                </Button>
+                <a
+                  href={`/${emp.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-zinc-500 underline"
+                >
+                  Ver página
+                </a>
+                <Button variant="secondary" onClick={() => openAccessForm(emp)}>
+                  Crear acceso al panel
+                </Button>
+              </div>
+
+              {accessDoneFor === emp.id && (
+                <p className="text-sm text-green-700">Acceso creado. Pasale el email y la contraseña a {emp.name}.</p>
+              )}
+
+              {accessFor === emp.id && (
+                <form
+                  onSubmit={(e) => createAccess(emp, e)}
+                  className="flex flex-wrap items-end gap-3 rounded-lg bg-zinc-50 p-3"
+                >
+                  <div className="flex-1 min-w-[160px]">
+                    <Label>Email de {emp.name}</Label>
+                    <Input
+                      type="email"
+                      value={accessEmail}
+                      onChange={(e) => setAccessEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <Label>Contraseña (mínimo 8 caracteres)</Label>
+                    <Input
+                      type="text"
+                      value={accessPassword}
+                      onChange={(e) => setAccessPassword(e.target.value)}
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" disabled={accessSaving}>
+                    {accessSaving ? "Creando..." : "Confirmar"}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setAccessFor(null)}>
+                    Cancelar
+                  </Button>
+                  {accessError && <p className="w-full text-sm text-red-600">{accessError}</p>}
+                </form>
+              )}
             </Card>
           ))}
         </div>

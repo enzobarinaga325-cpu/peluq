@@ -1,0 +1,4 @@
+project_id = "dmtphbmklmbpjbstxvwq"
+
+[functions.create-staff-user]
+verify_jwt = true
