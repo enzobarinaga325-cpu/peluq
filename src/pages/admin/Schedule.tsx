@@ -13,6 +13,8 @@ export function SchedulePage() {
   const [exceptions, setExceptions] = useState<ScheduleException[]>([]);
   const [excDate, setExcDate] = useState("");
   const [excClosed, setExcClosed] = useState(true);
+  const [slotInterval, setSlotInterval] = useState(15);
+  const [savingInterval, setSavingInterval] = useState(false);
 
   useEffect(() => {
     supabase
@@ -26,12 +28,22 @@ export function SchedulePage() {
   }, []);
 
   async function load(empId: string) {
-    const [{ data: sch }, { data: exc }] = await Promise.all([
+    const [{ data: sch }, { data: exc }, { data: settings }] = await Promise.all([
       supabase.from("schedules").select("*").eq("employee_id", empId).order("day_of_week"),
       supabase.from("schedule_exceptions").select("*").eq("employee_id", empId).order("date"),
+      supabase.from("employee_settings").select("slot_interval_minutes").eq("employee_id", empId).maybeSingle(),
     ]);
     setSchedules(sch ?? []);
     setExceptions(exc ?? []);
+    setSlotInterval(settings?.slot_interval_minutes ?? 15);
+  }
+
+  async function saveSlotInterval(minutes: number) {
+    setSavingInterval(true);
+    await supabase
+      .from("employee_settings")
+      .upsert({ employee_id: employeeId, slot_interval_minutes: minutes }, { onConflict: "employee_id" });
+    setSavingInterval(false);
   }
 
   useEffect(() => {
@@ -93,6 +105,32 @@ export function SchedulePage() {
           </Select>
         </Card>
       )}
+
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold">Duración de cada turno</h2>
+        <p className="mb-3 text-xs text-zinc-500">
+          Define cada cuántos minutos arrancan los horarios disponibles, contando desde la hora de apertura de cada
+          día (ej. con 40 min y apertura 09:00, los horarios son 09:00, 09:40, 10:20…).
+        </p>
+        <div className="flex items-center gap-3">
+          <Select
+            value={String(slotInterval)}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setSlotInterval(v);
+              saveSlotInterval(v);
+            }}
+            className="w-40"
+          >
+            {[10, 15, 20, 30, 40, 45, 60, 90].map((m) => (
+              <option key={m} value={m}>
+                {m} minutos
+              </option>
+            ))}
+          </Select>
+          {savingInterval && <span className="text-xs text-zinc-400">Guardando…</span>}
+        </div>
+      </Card>
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold">Horario semanal</h2>

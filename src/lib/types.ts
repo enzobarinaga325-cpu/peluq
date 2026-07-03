@@ -8,6 +8,12 @@ export type Employee = {
   created_at: string;
 };
 
+export type EmployeeSettings = {
+  employee_id: string;
+  slot_interval_minutes: number;
+  updated_at: string;
+};
+
 export type Service = {
   id: string;
   employee_id: string;

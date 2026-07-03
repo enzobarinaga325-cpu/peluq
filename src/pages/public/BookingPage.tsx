@@ -16,6 +16,7 @@ export function BookingPage() {
   const [serviceId, setServiceId] = useState("");
   const [date, setDate] = useState(todayStr());
   const [busySlots, setBusySlots] = useState<BusySlot[]>([]);
+  const [slotInterval, setSlotInterval] = useState(15);
   const [time, setTime] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -34,15 +35,17 @@ export function BookingPage() {
       .then(async ({ data: emp }) => {
         setEmployee(emp ?? null);
         if (!emp) return;
-        const [{ data: svc }, { data: sch }, { data: exc }] = await Promise.all([
+        const [{ data: svc }, { data: sch }, { data: exc }, { data: settings }] = await Promise.all([
           supabase.from("services").select("*").eq("employee_id", emp.id).eq("active", true).order("name"),
           supabase.from("schedules").select("*").eq("employee_id", emp.id),
           supabase.from("schedule_exceptions").select("*").eq("employee_id", emp.id),
+          supabase.from("employee_settings").select("slot_interval_minutes").eq("employee_id", emp.id).maybeSingle(),
         ]);
         setServices(svc ?? []);
         if (svc && svc.length > 0) setServiceId(svc[0].id);
         setSchedules(sch ?? []);
         setExceptions(exc ?? []);
+        setSlotInterval(settings?.slot_interval_minutes ?? 15);
       });
   }, [slug]);
 
@@ -67,8 +70,9 @@ export function BookingPage() {
       exceptions,
       busySlots,
       durationMinutes: selectedService.duration_minutes,
+      stepMinutes: slotInterval,
     });
-  }, [date, schedules, exceptions, busySlots, selectedService]);
+  }, [date, schedules, exceptions, busySlots, selectedService, slotInterval]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
