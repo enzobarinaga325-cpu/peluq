@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { Button, Card, Input, Label, Badge } from "@/components/ui";
+import { useAuth } from "@/lib/AuthContext";
 
 function slugify(name: string): string {
   return name
@@ -13,6 +15,7 @@ function slugify(name: string): string {
 }
 
 export function Employees() {
+  const { profile } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -59,6 +62,8 @@ export function Employees() {
     await supabase.from("employees").update({ logo_url: data.publicUrl }).eq("id", emp.id);
     load();
   }
+
+  if (profile?.role !== "owner") return <Navigate to="/admin" replace />;
 
   return (
     <div className="flex flex-col gap-6">

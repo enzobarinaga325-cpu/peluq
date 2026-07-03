@@ -4,10 +4,12 @@ import type { Appointment, Employee, Service } from "@/lib/types";
 import { Button, Card, Select, Badge } from "@/components/ui";
 import { money, todayStr, formatDateLong } from "@/lib/format";
 import { buildReminderMessage, waLink } from "@/lib/whatsapp";
+import { useAuth } from "@/lib/AuthContext";
 
 type Row = Appointment & { employee?: Employee; service?: Service };
 
 export function Appointments() {
+  const { profile } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>("todos");
   const [rows, setRows] = useState<Row[]>([]);
@@ -50,17 +52,19 @@ export function Appointments() {
       </div>
 
       <Card className="flex flex-wrap items-end gap-3">
-        <div className="w-48">
-          <label className="mb-1 block text-xs font-medium text-zinc-600">Empleado</label>
-          <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-            <option value="todos">Todos</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </Select>
-        </div>
+        {profile?.role === "owner" && (
+          <div className="w-48">
+            <label className="mb-1 block text-xs font-medium text-zinc-600">Empleado</label>
+            <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+              <option value="todos">Todos</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-xs font-medium text-zinc-600">Desde</label>
           <input

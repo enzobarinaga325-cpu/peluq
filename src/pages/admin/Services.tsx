@@ -3,8 +3,10 @@ import { supabase } from "@/lib/supabase";
 import type { Employee, Service } from "@/lib/types";
 import { Button, Card, Input, Label, Select, Badge } from "@/components/ui";
 import { money } from "@/lib/format";
+import { useAuth } from "@/lib/AuthContext";
 
 export function Services() {
+  const { profile } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>("");
   const [services, setServices] = useState<Service[]>([]);
@@ -67,16 +69,18 @@ export function Services() {
         <p className="text-sm text-zinc-500">Cada empleado tiene su propia lista de servicios.</p>
       </div>
 
-      <Card>
-        <Label>Empleado</Label>
-        <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-          {employees.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-            </option>
-          ))}
-        </Select>
-      </Card>
+      {profile?.role === "owner" && (
+        <Card>
+          <Label>Empleado</Label>
+          <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+            {employees.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </Select>
+        </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold">Agregar servicio</h2>

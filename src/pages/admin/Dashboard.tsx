@@ -4,6 +4,7 @@ import type { Appointment, Employee, Service } from "@/lib/types";
 import { Card, Select } from "@/components/ui";
 import { money, todayStr, addDaysStr, DIAS_SEMANA } from "@/lib/format";
 import { dayOfWeekFor } from "@/lib/availability";
+import { useAuth } from "@/lib/AuthContext";
 
 type Row = Appointment & { employee?: Employee; service?: Service };
 
@@ -17,6 +18,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 export function Dashboard() {
+  const { profile } = useAuth();
   const [range, setRange] = useState("30");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,9 @@ export function Dashboard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Estadísticas</h1>
-          <p className="text-sm text-zinc-500">Resumen de la actividad</p>
+          <p className="text-sm text-zinc-500">
+            {profile?.role === "owner" ? "Resumen de la actividad" : "Tus turnos y estadísticas"}
+          </p>
         </div>
         <div className="w-40">
           <Select value={range} onChange={(e) => setRange(e.target.value)}>
@@ -107,18 +111,20 @@ export function Dashboard() {
                 {stats.topServices.length === 0 && <li className="text-zinc-400">Sin datos</li>}
               </ul>
             </Card>
-            <Card>
-              <h2 className="mb-2 text-sm font-semibold">Empleados con más turnos</h2>
-              <ul className="flex flex-col gap-1 text-sm">
-                {stats.topEmployees.map(([name, count]) => (
-                  <li key={name} className="flex justify-between">
-                    <span>{name}</span>
-                    <span className="text-zinc-500">{count}</span>
-                  </li>
-                ))}
-                {stats.topEmployees.length === 0 && <li className="text-zinc-400">Sin datos</li>}
-              </ul>
-            </Card>
+            {profile?.role === "owner" && (
+              <Card>
+                <h2 className="mb-2 text-sm font-semibold">Empleados con más turnos</h2>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {stats.topEmployees.map(([name, count]) => (
+                    <li key={name} className="flex justify-between">
+                      <span>{name}</span>
+                      <span className="text-zinc-500">{count}</span>
+                    </li>
+                  ))}
+                  {stats.topEmployees.length === 0 && <li className="text-zinc-400">Sin datos</li>}
+                </ul>
+              </Card>
+            )}
             <Card>
               <h2 className="mb-2 text-sm font-semibold">Día más ocupado</h2>
               <p className="text-2xl font-semibold capitalize">{stats.busiestDay}</p>

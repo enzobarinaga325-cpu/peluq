@@ -4,8 +4,10 @@ import type { Employee, RecurringAppointment, Service } from "@/lib/types";
 import { Button, Card, Input, Label, Select, Badge } from "@/components/ui";
 import { DIAS_SEMANA, addDaysStr, todayStr } from "@/lib/format";
 import { dayOfWeekFor, addMinutesToTime } from "@/lib/availability";
+import { useAuth } from "@/lib/AuthContext";
 
 export function Recurring() {
+  const { profile } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState("");
   const [services, setServices] = useState<Service[]>([]);
@@ -103,16 +105,18 @@ export function Recurring() {
         </p>
       </div>
 
-      <Card>
-        <Label>Empleado</Label>
-        <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-          {employees.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-            </option>
-          ))}
-        </Select>
-      </Card>
+      {profile?.role === "owner" && (
+        <Card>
+          <Label>Empleado</Label>
+          <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+            {employees.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </Select>
+        </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold">Nuevo turno fijo</h2>

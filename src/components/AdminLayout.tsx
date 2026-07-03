@@ -1,18 +1,18 @@
 import { NavLink, Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
-import { Spinner } from "./ui";
+import { Spinner, Button } from "./ui";
 
 const NAV = [
-  { to: "/admin", label: "Panel", end: true },
-  { to: "/admin/turnos", label: "Turnos" },
-  { to: "/admin/turnos-fijos", label: "Turnos fijos" },
-  { to: "/admin/empleados", label: "Empleados" },
-  { to: "/admin/servicios", label: "Servicios" },
-  { to: "/admin/horarios", label: "Horarios" },
+  { to: "/admin", label: "Panel", end: true, ownerOnly: false },
+  { to: "/admin/turnos", label: "Turnos", ownerOnly: false },
+  { to: "/admin/turnos-fijos", label: "Turnos fijos", ownerOnly: false },
+  { to: "/admin/empleados", label: "Empleados", ownerOnly: true },
+  { to: "/admin/servicios", label: "Servicios", ownerOnly: false },
+  { to: "/admin/horarios", label: "Horarios", ownerOnly: false },
 ];
 
 export function AdminLayout() {
-  const { session, loading, signOut } = useAuth();
+  const { session, profile, loading, signOut } = useAuth();
 
   if (loading) {
     return (
@@ -24,6 +24,20 @@ export function AdminLayout() {
 
   if (!session) return <Navigate to="/admin/login" replace />;
 
+  if (!profile) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-4 text-center">
+        <p className="font-medium">Tu usuario todavía no tiene un rol asignado.</p>
+        <p className="text-sm text-zinc-500">Pedile al dueño que te dé acceso desde el SQL Editor de Supabase.</p>
+        <Button variant="secondary" onClick={() => signOut()}>
+          Cerrar sesión
+        </Button>
+      </div>
+    );
+  }
+
+  const nav = NAV.filter((item) => !item.ownerOnly || profile.role === "owner");
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">
@@ -34,7 +48,7 @@ export function AdminLayout() {
           </button>
         </div>
         <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 pb-2 text-sm">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

@@ -3,8 +3,10 @@ import { supabase } from "@/lib/supabase";
 import type { Employee, Schedule, ScheduleException } from "@/lib/types";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 import { DIAS_SEMANA } from "@/lib/format";
+import { useAuth } from "@/lib/AuthContext";
 
 export function SchedulePage() {
+  const { profile } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState("");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -79,16 +81,18 @@ export function SchedulePage() {
         <p className="text-sm text-zinc-500">Horario semanal y días puntuales cerrados (feriados, vacaciones, etc.)</p>
       </div>
 
-      <Card>
-        <Label>Empleado</Label>
-        <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-          {employees.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-            </option>
-          ))}
-        </Select>
-      </Card>
+      {profile?.role === "owner" && (
+        <Card>
+          <Label>Empleado</Label>
+          <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+            {employees.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </Select>
+        </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold">Horario semanal</h2>
