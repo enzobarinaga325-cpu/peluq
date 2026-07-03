@@ -23,15 +23,13 @@ export function Recurring() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase
-      .from("employees")
-      .select("*")
-      .order("created_at")
-      .then(({ data }) => {
-        setEmployees(data ?? []);
-        if (data && data.length > 0) setEmployeeId(data[0].id);
-      });
-  }, []);
+    let query = supabase.from("employees").select("*").order("created_at");
+    if (profile?.role === "staff" && profile.employeeId) query = query.eq("id", profile.employeeId);
+    query.then(({ data }) => {
+      setEmployees(data ?? []);
+      if (data && data.length > 0) setEmployeeId(data[0].id);
+    });
+  }, [profile]);
 
   async function loadForEmployee(empId: string) {
     const [{ data: svc }, { data: rec }] = await Promise.all([

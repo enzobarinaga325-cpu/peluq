@@ -17,8 +17,10 @@ export function Appointments() {
   const [from, setFrom] = useState(todayStr());
 
   useEffect(() => {
-    supabase.from("employees").select("*").order("created_at").then(({ data }) => setEmployees(data ?? []));
-  }, []);
+    let query = supabase.from("employees").select("*").order("created_at");
+    if (profile?.role === "staff" && profile.employeeId) query = query.eq("id", profile.employeeId);
+    query.then(({ data }) => setEmployees(data ?? []));
+  }, [profile]);
 
   async function load() {
     setLoading(true);
