@@ -4,6 +4,7 @@ export type Employee = {
   name: string;
   phone: string | null;
   logo_url: string | null;
+  background_url: string | null;
   active: boolean;
   created_at: string;
 };

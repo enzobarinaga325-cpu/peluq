@@ -3,12 +3,13 @@ import { useAuth } from "@/lib/AuthContext";
 import { Spinner, Button } from "./ui";
 
 const NAV = [
-  { to: "/admin", label: "Panel", end: true, ownerOnly: false },
-  { to: "/admin/turnos", label: "Turnos", ownerOnly: false },
-  { to: "/admin/turnos-fijos", label: "Turnos fijos", ownerOnly: false },
-  { to: "/admin/empleados", label: "Empleados", ownerOnly: true },
-  { to: "/admin/servicios", label: "Servicios", ownerOnly: false },
-  { to: "/admin/horarios", label: "Horarios", ownerOnly: false },
+  { to: "/admin", label: "Panel", end: true, ownerOnly: false, needsEmployee: false },
+  { to: "/admin/turnos", label: "Turnos", ownerOnly: false, needsEmployee: false },
+  { to: "/admin/turnos-fijos", label: "Turnos fijos", ownerOnly: false, needsEmployee: false },
+  { to: "/admin/empleados", label: "Empleados", ownerOnly: true, needsEmployee: false },
+  { to: "/admin/mi-perfil", label: "Mi perfil", ownerOnly: false, needsEmployee: true },
+  { to: "/admin/servicios", label: "Servicios", ownerOnly: false, needsEmployee: false },
+  { to: "/admin/horarios", label: "Horarios", ownerOnly: false, needsEmployee: false },
 ];
 
 export function AdminLayout() {
@@ -36,7 +37,9 @@ export function AdminLayout() {
     );
   }
 
-  const nav = NAV.filter((item) => !item.ownerOnly || profile.role === "owner");
+  const nav = NAV.filter(
+    (item) => (!item.ownerOnly || profile.role === "owner") && (!item.needsEmployee || !!profile.employeeId)
+  );
 
   return (
     <div className="min-h-screen bg-zinc-50">

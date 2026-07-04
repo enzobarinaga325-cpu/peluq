@@ -4,15 +4,7 @@ import { supabase } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { Button, Card, Input, Label, Badge } from "@/components/ui";
 import { useAuth } from "@/lib/AuthContext";
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
+import { slugify } from "@/lib/slug";
 
 export function Employees() {
   const { profile } = useAuth();
@@ -28,6 +20,9 @@ export function Employees() {
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessDoneFor, setAccessDoneFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingSlugFor, setEditingSlugFor] = useState<string | null>(null);
+  const [slugDraft, setSlugDraft] = useState("");
+  const [slugError, setSlugError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -78,6 +73,49 @@ export function Employees() {
     }
     const { data } = supabase.storage.from("logos").getPublicUrl(path);
     await supabase.from("employees").update({ logo_url: data.publicUrl }).eq("id", emp.id);
+    load();
+  }
+
+  async function uploadBackground(emp: Employee, file: File) {
+    const ext = file.name.split(".").pop();
+    const path = `${emp.slug}-bg-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("logos").upload(path, file, { upsert: true });
+    if (error) {
+      alert("Error subiendo el fondo: " + error.message);
+      return;
+    }
+    const { data } = supabase.storage.from("logos").getPublicUrl(path);
+    await supabase.from("employees").update({ background_url: data.publicUrl }).eq("id", emp.id);
+    load();
+  }
+
+  async function removeBackground(emp: Employee) {
+    await supabase.from("employees").update({ background_url: null }).eq("id", emp.id);
+    load();
+  }
+
+  function openSlugEditor(emp: Employee) {
+    setEditingSlugFor(emp.id);
+    setSlugDraft(emp.slug);
+    setSlugError(null);
+  }
+
+  async function saveSlug(emp: Employee) {
+    const slug = slugify(slugDraft);
+    if (!slug) {
+      setSlugError("La URL no puede quedar vacía.");
+      return;
+    }
+    if (slug === emp.slug) {
+      setEditingSlugFor(null);
+      return;
+    }
+    const { error } = await supabase.from("employees").update({ slug }).eq("id", emp.id);
+    if (error) {
+      setSlugError(error.code === "23505" ? "Esa URL ya la usa otro empleado." : error.message);
+      return;
+    }
+    setEditingSlugFor(null);
     load();
   }
 
@@ -156,7 +194,31 @@ export function Employees() {
                     <span className="font-medium">{emp.name}</span>
                     <Badge color={emp.active ? "green" : "zinc"}>{emp.active ? "Activo" : "Inactivo"}</Badge>
                   </div>
-                  <p className="text-xs text-zinc-500">/{emp.slug} · {emp.phone || "sin teléfono"}</p>
+                  {editingSlugFor === emp.id ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-zinc-400">/</span>
+                      <Input
+                        value={slugDraft}
+                        onChange={(e) => setSlugDraft(e.target.value)}
+                        className="!w-auto max-w-[180px] py-1 text-xs"
+                        autoFocus
+                      />
+                      <Button className="px-2 py-1 text-xs" onClick={() => saveSlug(emp)}>
+                        Guardar
+                      </Button>
+                      <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setEditingSlugFor(null)}>
+                        Cancelar
+                      </Button>
+                      {slugError && <p className="w-full text-xs text-red-600">{slugError}</p>}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500">
+                      /{emp.slug} · {emp.phone || "sin teléfono"}{" "}
+                      <button onClick={() => openSlugEditor(emp)} className="underline">
+                        editar URL
+                      </button>
+                    </p>
+                  )}
                 </div>
                 <label className="cursor-pointer text-sm text-zinc-600 underline">
                   Cambiar logo
@@ -170,6 +232,23 @@ export function Employees() {
                     }}
                   />
                 </label>
+                <label className="cursor-pointer text-sm text-zinc-600 underline">
+                  Cambiar fondo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadBackground(emp, file);
+                    }}
+                  />
+                </label>
+                {emp.background_url && (
+                  <button onClick={() => removeBackground(emp)} className="text-sm text-zinc-500 underline">
+                    Quitar fondo
+                  </button>
+                )}
                 <Button variant="secondary" onClick={() => toggleActive(emp)}>
                   {emp.active ? "Desactivar" : "Activar"}
                 </Button>

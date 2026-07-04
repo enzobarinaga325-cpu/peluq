@@ -135,6 +135,16 @@ export function BookingPage() {
   const maxDate = addDaysStr(todayStr(), 60);
 
   return (
+    <div
+      className="min-h-screen bg-zinc-50 bg-cover bg-center bg-fixed"
+      style={
+        employee.background_url
+          ? {
+              backgroundImage: `linear-gradient(rgba(250,250,250,0.88), rgba(250,250,250,0.88)), url(${employee.background_url})`,
+            }
+          : undefined
+      }
+    >
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-5 px-4 py-8">
       <div className="flex flex-col items-center gap-2">
         <img
@@ -204,6 +214,7 @@ export function BookingPage() {
           </form>
         </Card>
       )}
+    </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { BookingPage } from "@/pages/public/BookingPage";
 import { Login } from "@/pages/admin/Login";
 import { Dashboard } from "@/pages/admin/Dashboard";
 import { Employees } from "@/pages/admin/Employees";
+import { MyProfile } from "@/pages/admin/MyProfile";
 import { Services } from "@/pages/admin/Services";
 import { SchedulePage } from "@/pages/admin/Schedule";
 import { Appointments } from "@/pages/admin/Appointments";
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="turnos" element={<Appointments />} />
             <Route path="turnos-fijos" element={<Recurring />} />
             <Route path="empleados" element={<Employees />} />
+            <Route path="mi-perfil" element={<MyProfile />} />
             <Route path="servicios" element={<Services />} />
             <Route path="horarios" element={<SchedulePage />} />
           </Route>
