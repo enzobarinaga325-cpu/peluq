@@ -91,7 +91,7 @@ export function Appointments() {
               <div className="flex-1 min-w-[180px]">
                 <p className="font-medium">{row.client_name}</p>
                 <p className="text-xs text-zinc-500">
-                  {row.service?.name} con {row.employee?.name} · {money(row.price ?? 0)}
+                  {row.service?.name ?? "Servicio eliminado"} con {row.employee?.name} · {money(row.price ?? 0)}
                 </p>
               </div>
               <Badge
@@ -107,7 +107,7 @@ export function Appointments() {
                       buildReminderMessage({
                         clientName: row.client_name,
                         employeeName: row.employee?.name ?? "",
-                        serviceName: row.service?.name ?? "",
+                        serviceName: row.service?.name ?? "tu servicio",
                         date: row.date,
                         startTime: row.start_time,
                       })

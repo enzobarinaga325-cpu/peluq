@@ -71,16 +71,19 @@ export function Services() {
   }
 
   async function deleteService(svc: Service) {
-    if (!confirm(`¿Borrar "${svc.name}"? Esta acción no se puede deshacer.`)) return;
+    const { count } = await supabase
+      .from("recurring_appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("service_id", svc.id)
+      .eq("active", true);
+    const warning =
+      count && count > 0
+        ? ` Tiene ${count} turno${count === 1 ? "" : "s"} fijo${count === 1 ? "" : "s"} que también se va${count === 1 ? "" : "n"} a borrar.`
+        : "";
+    if (!confirm(`¿Borrar "${svc.name}"? Esta acción no se puede deshacer.${warning}`)) return;
     setError(null);
     const { error } = await supabase.from("services").delete().eq("id", svc.id);
-    if (error) {
-      setError(
-        error.code === "23503"
-          ? `No se puede borrar "${svc.name}" porque ya tiene turnos asociados. Desactivalo en su lugar.`
-          : error.message
-      );
-    }
+    if (error) setError(error.message);
     loadServices(employeeId);
   }
 
