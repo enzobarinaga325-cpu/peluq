@@ -63,6 +63,22 @@ export function Employees() {
     load();
   }
 
+  async function deleteEmployee(emp: Employee) {
+    const { count } = await supabase
+      .from("appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("employee_id", emp.id);
+    const warning =
+      count && count > 0
+        ? ` Tiene ${count} turno${count === 1 ? "" : "s"} cargado${count === 1 ? "" : "s"} que se van a borrar para siempre junto con sus servicios y horarios.`
+        : " Se van a borrar también sus servicios y horarios.";
+    if (!confirm(`¿Borrar a "${emp.name}" definitivamente? Esta acción no se puede deshacer.${warning}`)) return;
+    setError(null);
+    const { error } = await supabase.from("employees").delete().eq("id", emp.id);
+    if (error) setError(error.message);
+    load();
+  }
+
   async function uploadLogo(emp: Employee, file: File) {
     const ext = file.name.split(".").pop();
     const path = `${emp.slug}-${Date.now()}.${ext}`;
@@ -262,6 +278,9 @@ export function Employees() {
                 </a>
                 <Button variant="secondary" onClick={() => openAccessForm(emp)}>
                   Crear acceso al panel
+                </Button>
+                <Button variant="danger" onClick={() => deleteEmployee(emp)}>
+                  Borrar
                 </Button>
               </div>
 
