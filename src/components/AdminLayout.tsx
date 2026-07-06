@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import { NavLink, Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { ensureOccurrencesForProfile } from "@/lib/recurring";
 import { Spinner, Button } from "./ui";
 
 const NAV = [
@@ -14,6 +16,15 @@ const NAV = [
 
 export function AdminLayout() {
   const { session, profile, loading, signOut } = useAuth();
+  const generatedRef = useRef(false);
+
+  useEffect(() => {
+    if (!profile || generatedRef.current) return;
+    generatedRef.current = true;
+    ensureOccurrencesForProfile(profile).catch((err) => {
+      console.error("No se pudieron generar los turnos fijos", err);
+    });
+  }, [profile]);
 
   if (loading) {
     return (

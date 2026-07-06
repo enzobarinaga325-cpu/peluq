@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Appointment, Employee, RecurringAppointment, Service } from "@/lib/types";
 import { Button, Card, Input, Label, Select, Badge } from "@/components/ui";
-import { DIAS_SEMANA, addDaysStr, todayStr, formatDateLong } from "@/lib/format";
-import { dayOfWeekFor, addMinutesToTime } from "@/lib/availability";
+import { DIAS_SEMANA, todayStr, formatDateLong } from "@/lib/format";
+import { ensureOccurrences } from "@/lib/recurring";
 import { useAuth } from "@/lib/AuthContext";
 
 export function Recurring() {
@@ -68,20 +68,29 @@ export function Recurring() {
     e.preventDefault();
     if (!clientName.trim() || !clientPhone.trim() || !serviceId) return;
     setError(null);
-    const { error } = await supabase.from("recurring_appointments").insert({
-      employee_id: employeeId,
-      service_id: serviceId,
-      client_name: clientName.trim(),
-      client_phone: clientPhone.trim(),
-      day_of_week: Number(dayOfWeek),
-      start_time: startTime,
-    });
+    const { data, error } = await supabase
+      .from("recurring_appointments")
+      .insert({
+        employee_id: employeeId,
+        service_id: serviceId,
+        client_name: clientName.trim(),
+        client_phone: clientPhone.trim(),
+        day_of_week: Number(dayOfWeek),
+        start_time: startTime,
+      })
+      .select()
+      .single();
     if (error) {
       setError(error.message);
       return;
     }
     setClientName("");
     setClientPhone("");
+    loadForEmployee(employeeId);
+    // Reserva las próximas fechas de una para que el horario quede bloqueado ya mismo,
+    // en vez de esperar a la próxima vez que alguien entre al panel.
+    const svc = services.find((s) => s.id === serviceId);
+    await ensureOccurrences(data as RecurringAppointment, svc);
     loadForEmployee(employeeId);
   }
 
@@ -113,34 +122,22 @@ export function Recurring() {
     loadForEmployee(employeeId);
   }
 
-  /** Genera los próximos 8 turnos reales a partir de un turno fijo, saltando los horarios ya ocupados. */
-  async function generateOccurrences(rec: RecurringAppointment) {
+  /**
+   * Los turnos futuros ya se generan solos (ver src/lib/recurring.ts, disparado desde
+   * AdminLayout al entrar al panel). Este botón es solo para no esperar a la próxima vez
+   * que se abra el panel, por ejemplo justo después de cargar un turno fijo nuevo.
+   */
+  async function regenerate(rec: RecurringAppointment) {
     setGenerating(rec.id);
     setMessage(null);
     const svc = services.find((s) => s.id === rec.service_id);
-    const duration = svc?.duration_minutes ?? 30;
-    let created = 0;
-    let date = todayStr();
-    for (let i = 0; i < 90 && created < 8; i++) {
-      date = i === 0 ? date : addDaysStr(date, 1);
-      if (dayOfWeekFor(date) !== rec.day_of_week) continue;
-      const endTime = addMinutesToTime(rec.start_time, duration);
-      const { error } = await supabase.from("appointments").insert({
-        employee_id: rec.employee_id,
-        service_id: rec.service_id,
-        recurring_id: rec.id,
-        client_name: rec.client_name,
-        client_phone: rec.client_phone,
-        date,
-        start_time: rec.start_time,
-        end_time: endTime,
-        price: svc?.price ?? 0,
-      });
-      if (!error) created++;
-      // si error (choque de horario u ocupado), simplemente lo salteamos y seguimos
-    }
+    const { created, failed } = await ensureOccurrences(rec, svc);
     setGenerating(null);
-    setMessage(`Se generaron ${created} turnos para ${rec.client_name}.`);
+    setMessage(
+      failed > 0
+        ? `Se generaron ${created} turnos para ${rec.client_name}, pero ${failed} no se pudieron crear. Revisá si hay un choque de horario.`
+        : `Se generaron ${created} turnos nuevos para ${rec.client_name}.`
+    );
     loadForEmployee(employeeId);
   }
 
@@ -149,7 +146,8 @@ export function Recurring() {
       <div>
         <h1 className="text-lg font-semibold">Turnos fijos</h1>
         <p className="text-sm text-zinc-500">
-          Clientes que vienen siempre el mismo día y horario. Generá las próximas fechas cuando quieras que queden reservadas.
+          Clientes que vienen siempre el mismo día y horario. Las próximas fechas se reservan solas para que nadie
+          más pueda sacar ese horario; en "Turnos" van a aparecer recién unos días antes para no llenar la lista.
         </p>
       </div>
 
@@ -219,8 +217,8 @@ export function Recurring() {
                 </div>
                 <p className="text-xs text-zinc-500">{rec.start_time.slice(0, 5)} hs · {rec.client_phone}</p>
               </div>
-              <Button onClick={() => generateOccurrences(rec)} disabled={generating === rec.id}>
-                {generating === rec.id ? "Generando…" : "Generar próximos turnos"}
+              <Button variant="secondary" onClick={() => regenerate(rec)} disabled={generating === rec.id}>
+                {generating === rec.id ? "Generando…" : "Actualizar ahora"}
               </Button>
               <Button variant="danger" onClick={() => cancelPermanently(rec)}>
                 Cancelar definitivo

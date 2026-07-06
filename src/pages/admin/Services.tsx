@@ -132,7 +132,7 @@ export function Services() {
       ) : (
         <div className="flex flex-col gap-3">
           {services.map((svc) => (
-            <Card key={svc.id} className="flex flex-wrap items-center gap-4">
+            <Card key={`${svc.id}-${svc.price}`} className="flex flex-wrap items-center gap-4">
               <div className="flex-1 min-w-[160px]">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{svc.name}</span>

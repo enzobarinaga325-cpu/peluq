@@ -13,6 +13,8 @@ export function SchedulePage() {
   const [exceptions, setExceptions] = useState<ScheduleException[]>([]);
   const [excDate, setExcDate] = useState("");
   const [excClosed, setExcClosed] = useState(true);
+  const [excStart, setExcStart] = useState("09:00");
+  const [excEnd, setExcEnd] = useState("18:00");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -64,9 +66,19 @@ export function SchedulePage() {
   async function addException(e: React.FormEvent) {
     e.preventDefault();
     if (!excDate) return;
+    if (!excClosed && excStart >= excEnd) {
+      setError("La hora de fin debe ser posterior a la de inicio.");
+      return;
+    }
     setError(null);
     const { error } = await supabase.from("schedule_exceptions").upsert(
-      { employee_id: employeeId, date: excDate, is_closed: excClosed },
+      {
+        employee_id: employeeId,
+        date: excDate,
+        is_closed: excClosed,
+        start_time: excClosed ? null : excStart,
+        end_time: excClosed ? null : excEnd,
+      },
       { onConflict: "employee_id,date" }
     );
     if (error) {
@@ -154,6 +166,18 @@ export function SchedulePage() {
             <input type="checkbox" checked={excClosed} onChange={(e) => setExcClosed(e.target.checked)} />
             Cerrado todo el día
           </label>
+          {!excClosed && (
+            <>
+              <div>
+                <Label>Desde</Label>
+                <Input type="time" value={excStart} onChange={(e) => setExcStart(e.target.value)} className="w-32" />
+              </div>
+              <div>
+                <Label>Hasta</Label>
+                <Input type="time" value={excEnd} onChange={(e) => setExcEnd(e.target.value)} className="w-32" />
+              </div>
+            </>
+          )}
           <Button type="submit">Agregar</Button>
         </form>
         <div className="flex flex-col gap-2">

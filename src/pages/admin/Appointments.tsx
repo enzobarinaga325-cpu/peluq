@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Appointment, Employee, Service } from "@/lib/types";
 import { Button, Card, Select, Badge } from "@/components/ui";
-import { money, todayStr, formatDateLong } from "@/lib/format";
+import { money, todayStr, formatDateLong, addDaysStr } from "@/lib/format";
 import { buildReminderMessage, waLink } from "@/lib/whatsapp";
 import { useAuth } from "@/lib/AuthContext";
+import { RECURRING_VISIBILITY_DAYS } from "@/lib/recurring";
 
 type Row = Appointment & { employee?: Employee; service?: Service };
 
@@ -32,7 +33,12 @@ export function Appointments() {
       .order("start_time");
     if (employeeId !== "todos") query = query.eq("employee_id", employeeId);
     const { data } = await query;
-    setRows((data as Row[]) ?? []);
+    // Los turnos fijos se generan con hasta 60 días de anticipación para bloquear bien la
+    // agenda pública, pero mostrarlos todos acá saturaría la lista de "lo que viene". Los
+    // turnos de un cliente fijo recién aparecen acá cuando faltan pocos días.
+    const cutoff = addDaysStr(todayStr(), RECURRING_VISIBILITY_DAYS);
+    const visible = ((data as Row[]) ?? []).filter((row) => !row.recurring_id || row.date <= cutoff);
+    setRows(visible);
     setLoading(false);
   }
 
@@ -50,7 +56,10 @@ export function Appointments() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-lg font-semibold">Turnos</h1>
-        <p className="text-sm text-zinc-500">Desde acá gestionás las reservas y mandás recordatorios por WhatsApp.</p>
+        <p className="text-sm text-zinc-500">
+          Desde acá gestionás las reservas y mandás recordatorios por WhatsApp. Los turnos fijos aparecen acá
+          {" "}{RECURRING_VISIBILITY_DAYS} días antes de la fecha — para verlos todos andá a "Turnos fijos".
+        </p>
       </div>
 
       <Card className="flex flex-wrap items-end gap-3">
@@ -89,7 +98,10 @@ export function Appointments() {
                 <p className="text-xs text-zinc-500">{row.start_time.slice(0, 5)} hs</p>
               </div>
               <div className="flex-1 min-w-[180px]">
-                <p className="font-medium">{row.client_name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">{row.client_name}</p>
+                  {row.recurring_id && <Badge color="zinc">Fijo</Badge>}
+                </div>
                 <p className="text-xs text-zinc-500">
                   {row.service?.name ?? "Servicio eliminado"} con {row.employee?.name} · {money(row.price ?? 0)}
                 </p>
