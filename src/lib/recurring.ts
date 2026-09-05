@@ -8,8 +8,6 @@ import type { RecurringAppointment, Service } from "./types";
 // pueda llegar a reservar, sin depender de que alguien entre a "Turnos fijos" y apriete un botón.
 const HORIZON_DAYS = 60;
 
-export const RECURRING_VISIBILITY_DAYS = 5;
-
 /** Códigos de Postgres que significan "ya existe / se solapa" — no son una falla real. */
 function isBenignConflict(code: string | undefined): boolean {
   return code === "23505" || code === "23P01";
@@ -26,19 +24,37 @@ export async function ensureOccurrences(
 ): Promise<{ created: number; failed: number }> {
   const duration = service?.duration_minutes ?? 30;
   const endTime = addMinutesToTime(rec.start_time, duration);
-  let created = 0;
-  let failed = 0;
+
+  // Todas las fechas del horizonte que le tocan a este día de la semana.
+  const dates: string[] = [];
   let date = todayStr();
   for (let i = 0; i <= HORIZON_DAYS; i++) {
     date = i === 0 ? date : addDaysStr(date, 1);
-    if (dayOfWeekFor(date) !== rec.day_of_week) continue;
+    if (dayOfWeekFor(date) === rec.day_of_week) dates.push(date);
+  }
+  if (dates.length === 0) return { created: 0, failed: 0 };
+
+  // Nos fijamos primero cuáles de esas fechas ya tienen turno generado para esta regla,
+  // así solo insertamos las que faltan — evita mandar inserts repetidos que solo iban a
+  // chocar contra la base (ruido de errores 409 en la consola cada vez que se abre el panel).
+  const { data: existing } = await supabase
+    .from("appointments")
+    .select("date")
+    .eq("recurring_id", rec.id)
+    .in("date", dates);
+  const existingDates = new Set((existing ?? []).map((r) => r.date as string));
+  const missingDates = dates.filter((d) => !existingDates.has(d));
+
+  let created = 0;
+  let failed = 0;
+  for (const d of missingDates) {
     const { error } = await supabase.from("appointments").insert({
       employee_id: rec.employee_id,
       service_id: rec.service_id,
       recurring_id: rec.id,
       client_name: rec.client_name,
       client_phone: rec.client_phone,
-      date,
+      date: d,
       start_time: rec.start_time,
       end_time: endTime,
       price: service?.price ?? 0,

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Appointment, Employee, Service } from "@/lib/types";
-import { Button, Card, Select, Badge } from "@/components/ui";
-import { money, todayStr, formatDateLong, addDaysStr } from "@/lib/format";
+import { Button, Card, Select, Badge, Label, Input } from "@/components/ui";
+import { money, todayStr, formatDateLong } from "@/lib/format";
 import { buildReminderMessage, waLink } from "@/lib/whatsapp";
 import { useAuth } from "@/lib/AuthContext";
-import { RECURRING_VISIBILITY_DAYS } from "@/lib/recurring";
 
 type Row = Appointment & { employee?: Employee; service?: Service };
 
@@ -16,6 +16,10 @@ export function Appointments() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState(todayStr());
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [editDraft, setEditDraft] = useState({ clientName: "", clientPhone: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let query = supabase.from("employees").select("*").order("created_at");
@@ -33,11 +37,11 @@ export function Appointments() {
       .order("start_time");
     if (employeeId !== "todos") query = query.eq("employee_id", employeeId);
     const { data } = await query;
-    // Los turnos fijos se generan con hasta 60 días de anticipación para bloquear bien la
-    // agenda pública, pero mostrarlos todos acá saturaría la lista de "lo que viene". Los
-    // turnos de un cliente fijo recién aparecen acá cuando faltan pocos días.
-    const cutoff = addDaysStr(todayStr(), RECURRING_VISIBILITY_DAYS);
-    const visible = ((data as Row[]) ?? []).filter((row) => !row.recurring_id || row.date <= cutoff);
+    // Los turnos de clientes fijos se gestionan aparte, en "Turnos fijos" y en la Agenda —
+    // acá solo van los turnos sueltos, para no mezclar las dos cosas. Los cancelados
+    // desaparecen de esta lista (el horario liberado se ve en la Agenda, no hace falta
+    // seguir viendo acá turnos que ya no van a pasar).
+    const visible = ((data as Row[]) ?? []).filter((row) => !row.recurring_id && row.status !== "cancelado");
     setRows(visible);
     setLoading(false);
   }
@@ -52,13 +56,37 @@ export function Appointments() {
     load();
   }
 
+  function openEdit(row: Row) {
+    setError(null);
+    setEditing(row);
+    setEditDraft({ clientName: row.client_name, clientPhone: row.client_phone });
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    if (!editDraft.clientName.trim() || !editDraft.clientPhone.trim()) return;
+    setSaving(true);
+    setError(null);
+    const { error: updateError } = await supabase
+      .from("appointments")
+      .update({ client_name: editDraft.clientName.trim(), client_phone: editDraft.clientPhone.trim() })
+      .eq("id", editing.id);
+    setSaving(false);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setEditing(null);
+    load();
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-lg font-semibold">Turnos</h1>
         <p className="text-sm text-zinc-500">
-          Desde acá gestionás las reservas y mandás recordatorios por WhatsApp. Los turnos fijos aparecen acá
-          {" "}{RECURRING_VISIBILITY_DAYS} días antes de la fecha — para verlos todos andá a "Turnos fijos".
+          Turnos sueltos: gestioná las reservas y mandá recordatorios por WhatsApp. Los turnos de clientes fijos
+          se manejan en "Turnos fijos" y en la Agenda.
         </p>
       </div>
 
@@ -98,10 +126,7 @@ export function Appointments() {
                 <p className="text-xs text-zinc-500">{row.start_time.slice(0, 5)} hs</p>
               </div>
               <div className="flex-1 min-w-[180px]">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{row.client_name}</p>
-                  {row.recurring_id && <Badge color="zinc">Fijo</Badge>}
-                </div>
+                <p className="font-medium">{row.client_name}</p>
                 <p className="text-xs text-zinc-500">
                   {row.service?.name ?? "Servicio eliminado"} con {row.employee?.name} · {money(row.price ?? 0)}
                 </p>
@@ -138,9 +163,50 @@ export function Appointments() {
                   </Button>
                 </>
               )}
+              <Button variant="secondary" onClick={() => openEdit(row)}>
+                Editar
+              </Button>
             </Card>
           ))}
           {rows.length === 0 && <p className="text-sm text-zinc-500">No hay turnos para este filtro.</p>}
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Editar turno</h2>
+              <button onClick={() => setEditing(null)} className="text-zinc-400 hover:text-zinc-700">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <Label>Cliente</Label>
+                <Input
+                  value={editDraft.clientName}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, clientName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Teléfono</Label>
+                <Input
+                  value={editDraft.clientPhone}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, clientPhone: e.target.value }))}
+                />
+              </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setEditing(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={saveEdit} disabled={saving}>
+                  Guardar cambios
+                </Button>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>

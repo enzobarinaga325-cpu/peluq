@@ -6,12 +6,9 @@ import { Spinner, Button } from "./ui";
 
 const NAV = [
   { to: "/admin", label: "Panel", end: true, ownerOnly: false, needsEmployee: false },
-  { to: "/admin/turnos", label: "Turnos", ownerOnly: false, needsEmployee: false },
-  { to: "/admin/turnos-fijos", label: "Turnos fijos", ownerOnly: false, needsEmployee: false },
-  { to: "/admin/empleados", label: "Empleados", ownerOnly: true, needsEmployee: false },
-  { to: "/admin/mi-perfil", label: "Mi perfil", ownerOnly: false, needsEmployee: true },
-  { to: "/admin/servicios", label: "Servicios", ownerOnly: false, needsEmployee: false },
-  { to: "/admin/horarios", label: "Horarios", ownerOnly: false, needsEmployee: false },
+  { to: "/admin/reservas", label: "Reservas", ownerOnly: false, needsEmployee: false },
+  { to: "/admin/agenda", label: "Agenda", ownerOnly: false, needsEmployee: false },
+  { to: "/admin/configuracion", label: "Configuración", ownerOnly: false, needsEmployee: false },
 ];
 
 export function AdminLayout() {

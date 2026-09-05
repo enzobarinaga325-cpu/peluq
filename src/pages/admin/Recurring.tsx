@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { Appointment, Employee, RecurringAppointment, Service } from "@/lib/types";
+import type { Employee, RecurringAppointment, Service } from "@/lib/types";
 import { Button, Card, Input, Label, Select, Badge } from "@/components/ui";
-import { DIAS_SEMANA, todayStr, formatDateLong } from "@/lib/format";
+import { DIAS_SEMANA, todayStr } from "@/lib/format";
 import { ensureOccurrences } from "@/lib/recurring";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -13,14 +14,14 @@ export function Recurring() {
   const [services, setServices] = useState<Service[]>([]);
   const [serviceId, setServiceId] = useState("");
   const [recurring, setRecurring] = useState<RecurringAppointment[]>([]);
-  const [upcoming, setUpcoming] = useState<Record<string, Appointment[]>>({});
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [dayOfWeek, setDayOfWeek] = useState("1");
   const [startTime, setStartTime] = useState("10:00");
-  const [generating, setGenerating] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<RecurringAppointment | null>(null);
+  const [editDraft, setEditDraft] = useState({ clientName: "", clientPhone: "" });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let query = supabase.from("employees").select("*").order("created_at");
@@ -39,25 +40,6 @@ export function Recurring() {
     setServices(svc ?? []);
     if (svc && svc.length > 0) setServiceId(svc[0].id);
     setRecurring(rec ?? []);
-
-    const ids = (rec ?? []).map((r) => r.id);
-    if (ids.length > 0) {
-      const { data: appts } = await supabase
-        .from("appointments")
-        .select("*")
-        .in("recurring_id", ids)
-        .eq("status", "confirmado")
-        .gte("date", todayStr())
-        .order("date");
-      const byRecurring: Record<string, Appointment[]> = {};
-      for (const a of appts ?? []) {
-        if (!a.recurring_id) continue;
-        (byRecurring[a.recurring_id] ??= []).push(a);
-      }
-      setUpcoming(byRecurring);
-    } else {
-      setUpcoming({});
-    }
   }
 
   useEffect(() => {
@@ -86,7 +68,6 @@ export function Recurring() {
     }
     setClientName("");
     setClientPhone("");
-    loadForEmployee(employeeId);
     // Reserva las próximas fechas de una para que el horario quede bloqueado ya mismo,
     // en vez de esperar a la próxima vez que alguien entre al panel.
     const svc = services.find((s) => s.id === serviceId);
@@ -94,9 +75,17 @@ export function Recurring() {
     loadForEmployee(employeeId);
   }
 
-  /** Cancela definitivamente: borra la regla y cancela todos los turnos futuros ya generados a partir de ella. */
+  /** Cancelación definitiva: borra la regla (desaparece de Turnos fijos) y libera todos sus
+   * turnos futuros ya generados sin borrarlos — quedan cancelados, para que su horario
+   * siga viéndose como su propia franja en la Agenda en vez de fundirse con el hueco de al
+   * lado; al borrarse la regla dejan de estar asociados a un cliente fijo. Los turnos ya
+   * pasados (completados o de días anteriores) no se tocan. */
   async function cancelPermanently(rec: RecurringAppointment) {
-    if (!confirm(`¿Cancelar definitivamente el turno fijo de ${rec.client_name}? Se liberan todos sus turnos futuros ya generados.`))
+    if (
+      !confirm(
+        `¿Cancelar el turno fijo de ${rec.client_name} para siempre? Se liberan todos sus turnos futuros y se borra la regla — no se puede deshacer.`,
+      )
+    )
       return;
     setError(null);
     const { error: e1 } = await supabase
@@ -114,30 +103,41 @@ export function Recurring() {
     loadForEmployee(employeeId);
   }
 
-  /** Cancela solo una fecha puntual, sin tocar la regla fija (sigue generando turnos futuros). */
-  async function cancelOneDay(appointmentId: string) {
+  function openEdit(rec: RecurringAppointment) {
     setError(null);
-    const { error } = await supabase.from("appointments").update({ status: "cancelado" }).eq("id", appointmentId);
-    if (error) setError(error.message);
-    loadForEmployee(employeeId);
+    setEditDraft({ clientName: rec.client_name, clientPhone: rec.client_phone });
+    setEditing(rec);
   }
 
-  /**
-   * Los turnos futuros ya se generan solos (ver src/lib/recurring.ts, disparado desde
-   * AdminLayout al entrar al panel). Este botón es solo para no esperar a la próxima vez
-   * que se abra el panel, por ejemplo justo después de cargar un turno fijo nuevo.
-   */
-  async function regenerate(rec: RecurringAppointment) {
-    setGenerating(rec.id);
-    setMessage(null);
-    const svc = services.find((s) => s.id === rec.service_id);
-    const { created, failed } = await ensureOccurrences(rec, svc);
-    setGenerating(null);
-    setMessage(
-      failed > 0
-        ? `Se generaron ${created} turnos para ${rec.client_name}, pero ${failed} no se pudieron crear. Revisá si hay un choque de horario.`
-        : `Se generaron ${created} turnos nuevos para ${rec.client_name}.`
-    );
+  /** Actualiza la regla y, para que no quede desactualizado en la Agenda, también los
+   * turnos ya generados a futuro (cada uno guarda su propia copia del nombre/teléfono). */
+  async function saveEdit() {
+    if (!editing) return;
+    const clientName = editDraft.clientName.trim();
+    const clientPhone = editDraft.clientPhone.trim();
+    if (!clientName || !clientPhone) {
+      setError("Completá nombre y teléfono del cliente.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const { error: e1 } = await supabase
+      .from("recurring_appointments")
+      .update({ client_name: clientName, client_phone: clientPhone })
+      .eq("id", editing.id);
+    if (e1) {
+      setSaving(false);
+      setError(e1.message);
+      return;
+    }
+    await supabase
+      .from("appointments")
+      .update({ client_name: clientName, client_phone: clientPhone })
+      .eq("recurring_id", editing.id)
+      .eq("status", "confirmado")
+      .gte("date", todayStr());
+    setSaving(false);
+    setEditing(null);
     loadForEmployee(employeeId);
   }
 
@@ -147,7 +147,7 @@ export function Recurring() {
         <h1 className="text-lg font-semibold">Turnos fijos</h1>
         <p className="text-sm text-zinc-500">
           Clientes que vienen siempre el mismo día y horario. Las próximas fechas se reservan solas para que nadie
-          más pueda sacar ese horario; en "Turnos" van a aparecer recién unos días antes para no llenar la lista.
+          más pueda sacar ese horario; se ven y se gestionan día a día desde la Agenda.
         </p>
       </div>
 
@@ -204,50 +204,64 @@ export function Recurring() {
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </Card>
 
-      {message && <p className="text-sm text-zinc-600">{message}</p>}
-
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         {recurring.map((rec) => (
-          <Card key={rec.id} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex-1 min-w-[160px]">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{rec.client_name}</span>
-                  <Badge>{DIAS_SEMANA[rec.day_of_week]}</Badge>
-                </div>
-                <p className="text-xs text-zinc-500">{rec.start_time.slice(0, 5)} hs · {rec.client_phone}</p>
+          <Card key={rec.id} className="flex flex-wrap items-center gap-4">
+            <div className="flex-1 min-w-[160px]">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{rec.client_name}</span>
+                <Badge>{DIAS_SEMANA[rec.day_of_week]}</Badge>
               </div>
-              <Button variant="secondary" onClick={() => regenerate(rec)} disabled={generating === rec.id}>
-                {generating === rec.id ? "Generando…" : "Actualizar ahora"}
-              </Button>
-              <Button variant="danger" onClick={() => cancelPermanently(rec)}>
-                Cancelar definitivo
-              </Button>
+              <p className="text-xs text-zinc-500">{rec.start_time.slice(0, 5)} hs · {rec.client_phone}</p>
             </div>
-
-            {(upcoming[rec.id]?.length ?? 0) > 0 && (
-              <div className="rounded-lg bg-zinc-50 p-3">
-                <p className="mb-2 text-xs font-medium text-zinc-600">Próximos turnos generados — cancelar solo un día:</p>
-                <div className="flex flex-wrap gap-2">
-                  {upcoming[rec.id].map((a) => (
-                    <div key={a.id} className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs">
-                      <span>{formatDateLong(a.date)}</span>
-                      <button
-                        onClick={() => cancelOneDay(a.id)}
-                        className="text-red-600 hover:underline"
-                        title="Cancelar solo este día"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <Button variant="secondary" onClick={() => openEdit(rec)}>
+              Editar
+            </Button>
+            <Button variant="danger" onClick={() => cancelPermanently(rec)}>
+              Cancelar definitivo
+            </Button>
           </Card>
         ))}
         {recurring.length === 0 && <p className="text-sm text-zinc-500">No hay turnos fijos para este empleado.</p>}
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Editar turno fijo</h2>
+              <button onClick={() => setEditing(null)} className="text-zinc-400 hover:text-zinc-700">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <Label>Cliente</Label>
+                <Input
+                  value={editDraft.clientName}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, clientName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Teléfono</Label>
+                <Input
+                  value={editDraft.clientPhone}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, clientPhone: e.target.value }))}
+                />
+              </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setEditing(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={saveEdit} disabled={saving}>
+                  Guardar cambios
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
