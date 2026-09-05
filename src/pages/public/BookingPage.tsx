@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { BusySlot, Employee, Schedule, ScheduleException, Service } from "@/lib/types";
 import { Button, Card, Input, Label, Spinner } from "@/components/ui";
-import { money, todayStr, addDaysStr } from "@/lib/format";
+import { money, todayStr, addDaysStr, formatDateLong } from "@/lib/format";
 import { addMinutesToTime, getAvailableSlots } from "@/lib/availability";
 
 export function BookingPage() {
@@ -122,12 +123,25 @@ export function BookingPage() {
 
   if (done) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-4 text-center">
-        <p className="text-2xl">✅</p>
-        <p className="text-lg font-medium">¡Turno reservado!</p>
-        <p className="text-sm text-zinc-500">
-          {selectedService?.name} con {employee.name}, el {date} a las {time} hs.
-        </p>
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4">
+        <Card className="w-full max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+            <Check className="h-8 w-8 text-green-600" />
+          </div>
+          <h1 className="mb-2 text-2xl font-bold">¡Turno confirmado!</h1>
+          <p className="mb-6 text-zinc-500">Tu reserva fue registrada con éxito</p>
+          <div className="mb-6 space-y-2 rounded-lg bg-zinc-50 p-4 text-left text-sm">
+            <p><span className="font-medium">Servicio:</span> {selectedService?.name}</p>
+            <p><span className="font-medium">Con:</span> {employee.name}</p>
+            <p><span className="font-medium">Fecha:</span> {formatDateLong(date)}</p>
+            <p><span className="font-medium">Horario:</span> {time} hs</p>
+            <p><span className="font-medium">Nombre:</span> {name}</p>
+            <p><span className="font-medium">Teléfono:</span> {phone}</p>
+          </div>
+          <Link to="/">
+            <Button variant="secondary" className="w-full">Volver al inicio</Button>
+          </Link>
+        </Card>
       </div>
     );
   }
@@ -184,7 +198,10 @@ export function BookingPage() {
           {slots.map((t) => (
             <button
               key={t}
-              onClick={() => setTime(t)}
+              onClick={() => {
+                setTime(t);
+                setError(null);
+              }}
               className={`rounded-lg border px-2 py-2 text-sm ${
                 time === t ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 hover:bg-zinc-50"
               }`}
@@ -194,6 +211,9 @@ export function BookingPage() {
           ))}
           {slots.length === 0 && <p className="col-span-3 text-sm text-zinc-400">No hay horarios disponibles este día.</p>}
         </div>
+        {/* Se muestra acá afuera (no solo dentro del form) porque el error puede llegar
+            justo cuando se vuelve a pedir el horario, antes de que el usuario elija otro. */}
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </Card>
 
       {time && (
@@ -207,7 +227,6 @@ export function BookingPage() {
               <Label>Teléfono</Label>
               <Input value={phone} onChange={(e) => setPhone(e.target.value)} required />
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
             <Button type="submit" disabled={submitting}>
               {submitting ? "Reservando..." : `Confirmar turno · ${money(selectedService?.price ?? 0)}`}
             </Button>

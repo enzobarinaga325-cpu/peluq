@@ -67,13 +67,28 @@ create table if not exists appointments (
   end_time time not null,
   status text not null default 'confirmado' check (status in ('confirmado','completado','cancelado')),
   price numeric(10,2),
-  created_at timestamptz not null default now(),
-  unique(employee_id, date, start_time)
+  created_at timestamptz not null default now()
+  -- Sin unique(employee_id, date, start_time): un turno cancelado no debe bloquear que
+  -- alguien más ocupe ese mismo horario después. El exclusion constraint de más abajo
+  -- (appointments_no_overlap, filtrado por status <> 'cancelado') ya evita los choques
+  -- reales entre turnos activos, incluyendo el caso de arrancar a la misma hora exacta.
 );
 
 create index if not exists idx_appointments_employee_date on appointments (employee_id, date);
 create index if not exists idx_services_employee on services (employee_id);
 create index if not exists idx_schedules_employee on schedules (employee_id);
+
+-- Evita que dos turnos activos del mismo empleado se solapen en el tiempo, sin importar
+-- la duración de cada uno ni si arrancan a la misma hora exacta. Los cancelados no cuentan.
+create extension if not exists btree_gist;
+alter table appointments drop constraint if exists appointments_no_overlap;
+alter table appointments
+  add constraint appointments_no_overlap
+  exclude using gist (
+    employee_id with =,
+    tsrange((date + start_time)::timestamp, (date + end_time)::timestamp) with &&
+  )
+  where (status <> 'cancelado');
 
 -- Vista pública de horarios ocupados, SIN datos del cliente (para calcular disponibilidad sin exponer PII)
 create or replace view busy_slots as
