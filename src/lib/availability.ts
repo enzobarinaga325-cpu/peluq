@@ -31,10 +31,7 @@ export function getAvailableSlots(opts: {
   durationMinutes: number;
   now?: Date;
 }): string[] {
-  // El paso entre horarios es la propia duración del servicio: turnos consecutivos sin huecos
-  // (ej. servicio de 35 min → 09:00, 09:35, 10:10…), sin una configuración aparte que lo contradiga.
   const { date, schedules, exceptions, busySlots, durationMinutes, now = new Date() } = opts;
-  const stepMinutes = durationMinutes;
 
   const exception = exceptions.find((e) => e.date === date);
 
@@ -59,19 +56,44 @@ export function getAvailableSlots(opts: {
 
   const busyRanges = busySlots
     .filter((b) => b.date === date)
-    .map((b) => ({ start: toMinutes(b.start_time), end: toMinutes(b.end_time) }));
+    .map((b) => ({ start: toMinutes(b.start_time), end: toMinutes(b.end_time) }))
+    .sort((a, b) => a.start - b.start);
+
+  // Funde turnos ocupados que se solapan o se tocan, para que cada hueco libre quede bien
+  // delimitado por sus dos bordes reales (el fin de un turno y el inicio del siguiente).
+  const busy: { start: number; end: number }[] = [];
+  for (const r of busyRanges) {
+    const last = busy[busy.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else busy.push({ ...r });
+  }
+
+  // Huecos libres dentro de la ventana del día. El paso entre horarios es la propia duración
+  // del servicio, pero arrancando SIEMPRE desde el borde real de cada hueco (el inicio del día
+  // o el fin del turno anterior) — no desde el inicio del día a secas. Antes, un servicio de
+  // 20 min podía saltar 09:00, 09:20, 09:40… y ofrecer recién 13:20 aunque un turno anterior
+  // hubiera liberado la agenda justo a las 13:00: ese 13:00 no caía en la cuenta de "cada 20
+  // min desde las 09:00", así que quedaba un hueco de 20 min sin usar y el turno arrancaba más
+  // tarde de lo que le correspondía, comiéndole tiempo al que viniera después.
+  const gaps: { start: number; end: number }[] = [];
+  let cursor = windowStart;
+  for (const b of busy) {
+    if (b.start > cursor) gaps.push({ start: cursor, end: Math.min(b.start, windowEnd) });
+    cursor = Math.max(cursor, b.end);
+    if (cursor >= windowEnd) break;
+  }
+  if (cursor < windowEnd) gaps.push({ start: cursor, end: windowEnd });
 
   const isToday =
     date === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   const slots: string[] = [];
-  for (let start = windowStart; start + durationMinutes <= windowEnd; start += stepMinutes) {
-    const end = start + durationMinutes;
-    if (isToday && start <= nowMinutes) continue;
-    const overlaps = busyRanges.some((b) => start < b.end && end > b.start);
-    if (overlaps) continue;
-    slots.push(toHHMM(start));
+  for (const gap of gaps) {
+    for (let start = gap.start; start + durationMinutes <= gap.end; start += durationMinutes) {
+      if (isToday && start <= nowMinutes) continue;
+      slots.push(toHHMM(start));
+    }
   }
   return slots;
 }
