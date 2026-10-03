@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 import { Spinner } from "@/components/ui";
+import { CancelAppointments } from "@/components/CancelAppointments";
 
 export function Home() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -48,6 +49,9 @@ export function Home() {
           </Link>
         ))}
         {employees.length === 0 && <p className="text-center text-sm text-zinc-400">No hay empleados disponibles.</p>}
+      </div>
+      <div className="mt-4 flex">
+        <CancelAppointments />
       </div>
     </div>
   );

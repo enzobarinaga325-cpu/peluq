@@ -4,6 +4,7 @@ import { Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { BusySlot, Employee, Schedule, ScheduleException, Service } from "@/lib/types";
 import { Button, Card, Input, Label, Spinner } from "@/components/ui";
+import { CancelAppointments } from "@/components/CancelAppointments";
 import { money, todayStr, addDaysStr, formatDateLong } from "@/lib/format";
 import { addMinutesToTime, getAvailableSlots } from "@/lib/availability";
 
@@ -233,6 +234,8 @@ export function BookingPage() {
           </form>
         </Card>
       )}
+
+      <CancelAppointments />
     </div>
     </div>
   );
